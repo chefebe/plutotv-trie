@@ -8,16 +8,7 @@
 #include <tgmath.h>
 
 const int NUM_DIGITS = 10;
-const int VERBOSE = false;
-/**/
-/*
-void printNodes(node *pNode, int level=0) {
-	printf("%*s%s\n", level, "", pNode->val);
-	for (int i = 0; i < pNode->numNodes; i++) {
-		printNodes(&(pNode->nodeArray[i]), level + 1);
-	}
-}
-*/
+enum flag {GET_IDX, SET, UNSET, FIND_SET, FIND_UNSET};
 
 double getMapSize(int multiple) {
 	if (multiple >= 0) {
@@ -26,42 +17,70 @@ double getMapSize(int multiple) {
 	return 0;
 }
 
-void fillRandomMap(unsigned char *map, int arraySize) {
-	for (int i = 0; i < arraySize; i++) {
-		map[i] = i % 256;
+void binaryStr(int val, char *buf, int bufLength) {
+	char binaryStr[9];
+	itoa(val, binaryStr, 2);
+	int padLength = bufLength - int(strlen(binaryStr));
+	for (int i = 0; i < bufLength; i++) {
+		buf[i] = (i < padLength ? '0' : binaryStr[i-padLength]);
 	}
+	buf[bufLength] = '\0';
 }
 
-bool get(unsigned char *map, int idx) {
+bool get(unsigned char *map, double idx) {
 	int arrayIndex = int(floor(idx / 8));
-	int posInByte = idx % 8;
+	int posInByte = int(fmod(idx, 8)); //idx % 8;
 	int arrayVal = map[arrayIndex];
 	int bitVal = (arrayVal >> (posInByte)) & 0x1;
 
-	if (VERBOSE) {
-		if (posInByte == 0) {
-			char binary[9];
-			itoa(arrayVal, binary, 2);
-			printf("------ New array item: %d [%s] \n", arrayVal, binary);
-		}
-		printf("Array Index: %d. Array Value: %d. bitPos: %d. bitVal = %d\n", arrayIndex, arrayVal, posInByte, bitVal);
-	}
+	char binStr[9];
+	binaryStr(arrayVal, binStr, 8);
+	printf("Leaf bit position: %.0lf. Array Index: %d. Array Value: %d (%s). bitPos: %d. bitVal = %d\n", 
+		idx, arrayIndex, arrayVal, binStr, posInByte, bitVal);
 	return (bitVal == 1);
 }
 
-void set(unsigned char *map, int idx, bool value) {
+void set(unsigned char *map, double idx, bool value) {
 
+	int arrayIndex = int(floor(idx / 8));
+	int posInByte = int(fmod(idx, 8));
+	int arrayVal = map[arrayIndex];
 
+	printf("Before:\n");
+	bool isSet = get(map, idx);
+
+	if (value) {
+		if (isSet) {
+			printf("Value already SET\n");
+		}
+		map[arrayIndex] |= (0x1 << posInByte);
+	} else {
+		if (!isSet) {
+			printf("Value is already NOT SET\n");
+		}
+		map[arrayIndex] &= ~(0x1 << posInByte);
+	}
+	if (isSet && !value || !isSet && value) {
+		// a change was made. Show new value
+		printf("After:\n");
+		get(map, idx);
+	}
+	printf("\n");
+}
+
+void find(unsigned char *map, bool isSet, char *buf, int bufLength) {
+	printf("Find todo. Navigate tree.");
+	strcpy(buf, "0000000000");
 }
 
 // using radix trie orgnization, find bit number of this phone number's leaf
-double getBitPositionFromPhoneNumber(const char* phoneNumber) {
+double navigateTrie(unsigned char *map, const char* phoneNumber, enum flag action, bool display = false) {
 	int numDigits = strlen(phoneNumber);
 	int *nums = new int[numDigits];
 	for (int i = 0; i < numDigits; i++) {
 		nums[i] = phoneNumber[i] - '0';
 	}
-	printf("--- Number: %s\n", phoneNumber);
+	// printf("--- Number: %s\n", phoneNumber);
 	double triePosition = 0;
 	double trieBaseIndex = 0;
 	double trieRowOffset = 0;
@@ -69,166 +88,108 @@ double getBitPositionFromPhoneNumber(const char* phoneNumber) {
 		trieBaseIndex += (level == 0 ? 0 : pow(10, level));
 		trieRowOffset = (level == 0 ? nums[level] : 10 * trieRowOffset + nums[level]);
 		triePosition = trieBaseIndex + trieRowOffset;
-		printf("level: %d. number: %d. base: %f. offset: %f. position: %f\n", 
-			level, nums[level], trieBaseIndex, trieRowOffset, triePosition);
+
+		if (display) {
+			printf("level: %d. number: %d. base: %.0lf. offset: %.0lf. position: %.0lf\n",
+				level, nums[level], trieBaseIndex, trieRowOffset, triePosition);
+		}
+		if (action == SET || action == UNSET) {
+			set(map, triePosition, action == SET);
+		}
 	}
 	return triePosition;
 }
 
-// 0110 1011
-
-int main()
-{
-	printf("Go PlutoTV\n");
-	
-	// array of bits. 10+100+1K+10K+100K+1M+10M+100M+1B+10B == 11,111,111,110
-	// integers 8 bits each.  1,388,888,889	
-
-	int arraySize = int(ceil(getMapSize(NUM_DIGITS) / 8.0));
-	printf("arraySize: %d\n", arraySize);
-
-	//printf("map 10 size: %f\n", getMapSize(NUM_DIGITS));
-
-	arraySize = 300;
-	unsigned char *map = new unsigned char[arraySize];
-	// clear all values
-	memset(map, 0, arraySize);
-
-	fillRandomMap(map, arraySize);
-	for (int i = 0; i < 2400; i++) {
-		// print bit values (0,1,2,3)
-		bool isSet = get(map, i);
-	}
-
+char getMenuSelect(char *prompt, const char *allowedKeys) {
+	printf(prompt);
+	char c;
 	while (true) {
-		printf("Welcome to Chris' Riddle: To Trie or not to Trie\n");
-		printf("------------------------\n");
-		printf("1) Set or unset a phone number\n");
-		printf("2) Get state of phone number\n");
-		printf("3) Find phone number that is set or unset\n");
-		printf("4) Show phone number bit positions in array\n");
-		printf("q) Quit\n");
-
-		char c;
 		scanf("%c", &c);
-
-		char phoneNumber[100];
-		if (c == 1) {
-			printf("Enter 10-digit phone number: ");
-			getPhoneNumber(phoneNumber);
-			printf("Phone: %s", phoneNumber);
-			printf("1) Set\n");
-			printf("2) Unset\n");
+		if (strchr(allowedKeys, c) != NULL) {
+			return c;
 		}
 	}
-
 	return 0;
 }
 
 void getPhoneNumber(char *buffer) {
 	while (true) {
-		scanf("%9s", buffer);
+		printf("\nEnter 10-digit phone number: ");
+
+		scanf("%100s", buffer);
 		if (strlen(buffer) != 10) {
-			printf("Phone number must be 10 digits");
+			printf("Phone number must be 10 digits\n");
 			continue;
-		} 
+		}
 		char *endptr;
 		strtol(buffer, &endptr, 10);
 		if (*endptr != '\0' || endptr == buffer) {
-			printf("Invalid phone number");
+			printf("Invalid phone number\n");
 			continue;
 		}
-		break
+		break;
 	}
 }
 
+void userInteraction(unsigned char *map) {
+	printf("\n\nChris' Challenge: To Trie or not to Trie\n"
+		"------------------------\n");
+	char prompt[256];
+	while (true) {
+		strcpy(prompt, "\n"
+			"1) Set or unset a phone number\n"
+			"2) Get state of phone number\n"
+			"3) Find phone number that is set or unset\n"
+			"4) Show phone number bit positions in array\n"
+			"q) Quit\n");
 
-/*
+		char menuSel = getMenuSelect(prompt, "1234q");
+		if (menuSel == 'q') {
+			break;
+		}
+		if (menuSel == '3') {
+			strcpy(prompt, "\n1) Find a number that is SET\n2) Find a number that is NOT SET\nr) Return to menu\n");
+			menuSel = getMenuSelect(prompt, "12r");
+			char foundNumBuf[11];
+			bool isSet = (menuSel == '1');
+			find(map, isSet, foundNumBuf, 10);
+			printf("The number %s is %s\n\n", foundNumBuf, (isSet ? "SET" : "NOT SET"));
+			continue;
+		}
 
-getBitPositionFromPhoneNumber ("000");
-getBitPositionFromPhoneNumber ("001");
-getBitPositionFromPhoneNumber ("002");
-getBitPositionFromPhoneNumber ("003");
-getBitPositionFromPhoneNumber ("004");
-getBitPositionFromPhoneNumber ("005");
-getBitPositionFromPhoneNumber ("006");
-getBitPositionFromPhoneNumber ("007");
-getBitPositionFromPhoneNumber ("008");
-getBitPositionFromPhoneNumber ("009");
+		char phoneNumber[100];
+		getPhoneNumber(phoneNumber);
+		if (menuSel == '1') {
+			strcpy(prompt, "\n1) Set\n2) Unset\nr) Return to menu\n");
+			menuSel = getMenuSelect(prompt, "12r");
+			if (menuSel == '1' or menuSel == '2') {
+				// navigate the trie with set value will set/unset each node as it descends
+				navigateTrie(map, phoneNumber, (menuSel == '1' ? SET : UNSET));
+			}
+		} else if (menuSel == '2') {
+			double idx = navigateTrie(map, phoneNumber, GET_IDX);
+			bool isSet = get(map, idx);
+			printf("The phone number is %s\n\n", (isSet ? "SET" : "NOT SET"));
+		} else if (menuSel == '4') {
+			navigateTrie(map, phoneNumber, GET_IDX, true);
+		}
+	}
+}
 
-getBitPositionFromPhoneNumber ("010");
-getBitPositionFromPhoneNumber ("011");
-getBitPositionFromPhoneNumber ("012");
-getBitPositionFromPhoneNumber ("013");
-getBitPositionFromPhoneNumber ("014");
-getBitPositionFromPhoneNumber ("015");
-getBitPositionFromPhoneNumber ("016");
-getBitPositionFromPhoneNumber ("017");
-getBitPositionFromPhoneNumber ("018");
-getBitPositionFromPhoneNumber ("019");
+int main()
+{
+	printf("Go PlutoTV\n");
 
-getBitPositionFromPhoneNumber ("020");
-getBitPositionFromPhoneNumber ("021");
-getBitPositionFromPhoneNumber ("022");
-getBitPositionFromPhoneNumber ("023");
-getBitPositionFromPhoneNumber ("024");
-getBitPositionFromPhoneNumber ("025");
-getBitPositionFromPhoneNumber ("026");
-getBitPositionFromPhoneNumber ("027");
+	// array of bits. 10+100+1K+10K+100K+1M+10M+100M+1B+10B == 11,111,111,110
+	// integers 8 bits each.  1,388,888,889	
 
-getBitPositionFromPhoneNumber ("028");
-getBitPositionFromPhoneNumber ("029");
-getBitPositionFromPhoneNumber ("030");
-getBitPositionFromPhoneNumber ("031");
-getBitPositionFromPhoneNumber ("032");
-getBitPositionFromPhoneNumber ("033");
-getBitPositionFromPhoneNumber ("034");
-getBitPositionFromPhoneNumber ("035");
-getBitPositionFromPhoneNumber ("036");
-getBitPositionFromPhoneNumber ("037");
-getBitPositionFromPhoneNumber("038");
-getBitPositionFromPhoneNumber("039");
-getBitPositionFromPhoneNumber("040");
-getBitPositionFromPhoneNumber("041");
+	int arraySize = int(ceil(getMapSize(NUM_DIGITS) / 8.0));
+	printf("arraySize: %d\n", arraySize);
+	arraySize = 1000000000;
+	unsigned char *map = new unsigned char[arraySize];
+	printf("map created!");
+	memset(map, 0xF, arraySize);  // change 0xF to 0 to start fully unset. This sets every 1/2 byte for testing
 
-getBitPositionFromPhoneNumber("097");
-getBitPositionFromPhoneNumber("098");
-getBitPositionFromPhoneNumber("099");
-getBitPositionFromPhoneNumber("100");
-getBitPositionFromPhoneNumber("101");
-getBitPositionFromPhoneNumber("102");
-getBitPositionFromPhoneNumber("199");
-getBitPositionFromPhoneNumber("200");
-getBitPositionFromPhoneNumber("201");
-getBitPositionFromPhoneNumber("202");
-
-getBitPositionFromPhoneNumber("298");
-getBitPositionFromPhoneNumber("299");
-getBitPositionFromPhoneNumber("300");
-getBitPositionFromPhoneNumber("301");
-getBitPositionFromPhoneNumber("302");
-getBitPositionFromPhoneNumber("303");
-getBitPositionFromPhoneNumber("999");
-getBitPositionFromPhoneNumber("0000");
-getBitPositionFromPhoneNumber("0001");
-
-getBitPositionFromPhoneNumber("0999");
-getBitPositionFromPhoneNumber("1000");
-
-getBitPositionFromPhoneNumber("1999");
-getBitPositionFromPhoneNumber("2000");
-getBitPositionFromPhoneNumber("2499");
-getBitPositionFromPhoneNumber("2500");
-
-getBitPositionFromPhoneNumber("5899");
-getBitPositionFromPhoneNumber("5900");
-getBitPositionFromPhoneNumber("5901");
-getBitPositionFromPhoneNumber("9009");
-getBitPositionFromPhoneNumber("9010");
-
-getBitPositionFromPhoneNumber("8879");
-getBitPositionFromPhoneNumber("8880");
-	getBitPositionFromPhoneNumber("1234567890");
-	getBitPositionFromPhoneNumber("9999999999");
-	
-	*/
+	userInteraction(map);
+	return 0;
+}
