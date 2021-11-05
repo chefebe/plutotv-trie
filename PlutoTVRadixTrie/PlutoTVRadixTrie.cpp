@@ -8,7 +8,7 @@
 #include <tgmath.h>
 
 const int NUM_DIGITS = 10;
-enum flag {GET_IDX, SET, UNSET, FIND_SET, FIND_UNSET};
+enum flag {GET_IDX, SET, UNSET};
 
 double getMapSize(int multiple) {
 	if (multiple >= 0) {
@@ -68,9 +68,21 @@ void set(unsigned char *map, double idx, bool value) {
 	printf("\n");
 }
 
-void find(unsigned char *map, bool isSet, char *buf, int bufLength) {
-	printf("Find todo. Navigate tree.");
-	strcpy(buf, "0000000000");
+bool find(unsigned char *map, bool isSet, char *numStr, int level = 0, double baseIndex = 0, double rowOffset = 0) {
+	double startIdx = baseIndex + rowOffset;
+	for (int i = startIdx; i < startIdx + 10; i++) {
+		if (get(map, i) == isSet) {
+			numStr[level] = (i - startIdx) + '0';  // add this character to our number string
+			if (level == 9) {
+				numStr[level + 1] = '\0';
+				return true;
+			}
+			baseIndex += (pow(10, level+1));
+			rowOffset = (level == 0 ? 10 * i : 10 * (rowOffset + (i - startIdx)));
+			return find(map, isSet, numStr, level+1, baseIndex, rowOffset);
+		}
+	}
+	return false;
 }
 
 // using radix trie orgnization, find bit number of this phone number's leaf
@@ -152,8 +164,12 @@ void userInteraction(unsigned char *map) {
 			menuSel = getMenuSelect(prompt, "12r");
 			char foundNumBuf[11];
 			bool isSet = (menuSel == '1');
-			find(map, isSet, foundNumBuf, 10);
-			printf("The number %s is %s\n\n", foundNumBuf, (isSet ? "SET" : "NOT SET"));
+			bool foundNumber = find(map, isSet, foundNumBuf);
+			if (foundNumber) {
+				printf("The number %s is %s\n\n", foundNumBuf, (isSet ? "SET" : "NOT SET"));
+			} else {
+				printf("There are no %s numbers!\n\n", (isSet ? "SET" : "NOT SET"));
+			}
 			continue;
 		}
 
@@ -188,7 +204,7 @@ int main()
 	arraySize = 1000000000;
 	unsigned char *map = new unsigned char[arraySize];
 	printf("map created!");
-	memset(map, 0xF, arraySize);  // change 0xF to 0 to start fully unset. This sets every 1/2 byte for testing
+	memset(map, 0x0, arraySize);  // change 0xF to 0 to start fully unset. This sets every 1/2 byte for testing
 
 	userInteraction(map);
 	return 0;
